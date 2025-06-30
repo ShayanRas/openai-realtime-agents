@@ -17,6 +17,8 @@ interface UseUnifiedSessionOptions {
   onTranscriptionStart?: (itemId: string, role: 'user' | 'assistant') => void;
   onStatusChange?: (status: SessionStatus) => void;
   onAgentHandoff?: (agentName: string) => void;
+  onSpeechStarted?: (role: 'user' | 'assistant') => void;
+  onSpeechStopped?: (role: 'user' | 'assistant') => void;
 }
 
 export function useUnifiedSession(options: UseUnifiedSessionOptions = {}) {
@@ -38,6 +40,27 @@ export function useUnifiedSession(options: UseUnifiedSessionOptions = {}) {
     console.log('[Transport Event]', eventType, event);
     
     switch (eventType) {
+      case "input_audio_buffer.speech_started": {
+        console.log('[User Speech Started]', event);
+        options.onSpeechStarted?.('user');
+        break;
+      }
+      case "input_audio_buffer.speech_stopped": {
+        console.log('[User Speech Stopped]', event);
+        options.onSpeechStopped?.('user');
+        break;
+      }
+      case "response.audio.delta": {
+        console.log('[Assistant Audio Delta]', event);
+        // When we receive audio delta, assistant is speaking
+        options.onSpeechStarted?.('assistant');
+        break;
+      }
+      case "response.audio.done": {
+        console.log('[Assistant Audio Done]', event);
+        options.onSpeechStopped?.('assistant');
+        break;
+      }
       case "conversation.item.input_audio_transcription.completed": {
         console.log('[User Transcription Complete]', event);
         historyHandlers.current.handleTranscriptionCompleted(event);

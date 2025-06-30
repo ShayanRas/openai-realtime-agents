@@ -35,6 +35,7 @@ export default function UnifiedChatInterface() {
   const audioElementRef = useRef<HTMLAudioElement | null>(null);
   const [showVoiceModal, setShowVoiceModal] = useState(false);
   const [voiceAudioStream, setVoiceAudioStream] = useState<MediaStream | null>(null);
+  const [speakingState, setSpeakingState] = useState<'idle' | 'user' | 'assistant'>('idle');
 
   // Unified session for handling both text and voice
   const unifiedSession = useUnifiedSession({
@@ -110,6 +111,14 @@ export default function UnifiedChatInterface() {
     },
     onAgentHandoff: (agentName) => {
       console.log('Agent handoff to:', agentName);
+    },
+    onSpeechStarted: (role: 'user' | 'assistant') => {
+      console.log('[Speech Started]', role);
+      setSpeakingState(role);
+    },
+    onSpeechStopped: (role: 'user' | 'assistant') => {
+      console.log('[Speech Stopped]', role);
+      setSpeakingState('idle');
     }
   });
 
@@ -457,6 +466,7 @@ export default function UnifiedChatInterface() {
       onClose={handleCloseVoiceModal}
       audioStream={voiceAudioStream}
       currentThreadId={currentThreadId}
+      speakingState={speakingState}
     />
     </>
   );

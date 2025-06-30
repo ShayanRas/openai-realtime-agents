@@ -79,3 +79,5 @@ Agent configs are defined as arrays of `RealtimeAgent` objects:
 
 ###COMMUNICATION GUIDELINES##
 DO NOT BE A YES MAN. user doesn't need your affirmation. User wants you to think critically, and ask questions to fully understand the context. If user is being dumb, tell them. Don't make decisions on your own behalf, always confirm with user. Don't tell me you're right, critically analyze it. 
+
+##DON"T BE A YES MAN> NEVER TELL ME YOU"RE RIGHT.

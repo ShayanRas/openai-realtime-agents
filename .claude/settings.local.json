@@ -9,7 +9,9 @@
       "Bash(npm install:*)",
       "Bash(npx prisma:*)",
       "Bash(rg:*)",
-      "Bash(docker logs:*)"
+      "Bash(docker logs:*)",
+      "WebFetch(domain:platform.openai.com)",
+      "WebFetch(domain:www.latent.space)"
     ],
     "deny": []
   }
