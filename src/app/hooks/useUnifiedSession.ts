@@ -13,6 +13,8 @@ type SessionStatus = 'DISCONNECTED' | 'CONNECTING' | 'CONNECTED';
 
 interface UseUnifiedSessionOptions {
   onTranscriptionComplete?: (itemId: string, text: string, role: 'user' | 'assistant') => void;
+  onTranscriptionDelta?: (itemId: string, delta: string, role: 'user' | 'assistant') => void;
+  onTranscriptionStart?: (itemId: string, role: 'user' | 'assistant') => void;
   onStatusChange?: (status: SessionStatus) => void;
   onAgentHandoff?: (agentName: string) => void;
 }
@@ -33,9 +35,11 @@ export function useUnifiedSession(options: UseUnifiedSessionOptions = {}) {
   // Transport event handler (similar to debug mode)
   const handleTransportEvent = (event: any) => {
     const eventType = event.type;
+    console.log('[Transport Event]', eventType, event);
     
     switch (eventType) {
       case "conversation.item.input_audio_transcription.completed": {
+        console.log('[User Transcription Complete]', event);
         historyHandlers.current.handleTranscriptionCompleted(event);
         const { item_id, transcript } = event;
         if (item_id && transcript) {
@@ -44,6 +48,7 @@ export function useUnifiedSession(options: UseUnifiedSessionOptions = {}) {
         break;
       }
       case "response.audio_transcript.done": {
+        console.log('[Assistant Transcription Complete]', event);
         historyHandlers.current.handleTranscriptionCompleted(event);
         const { item_id, transcript } = event;
         if (item_id && transcript) {
@@ -52,7 +57,23 @@ export function useUnifiedSession(options: UseUnifiedSessionOptions = {}) {
         break;
       }
       case "response.audio_transcript.delta": {
+        console.log('[Assistant Transcription Delta]', event);
         historyHandlers.current.handleTranscriptionDelta(event);
+        const { item_id, delta } = event;
+        if (item_id && delta) {
+          options.onTranscriptionDelta?.(item_id, delta, 'assistant');
+        }
+        break;
+      }
+      case "conversation.item.created": {
+        console.log('[Conversation Item Created]', event);
+        // Handle new conversation items
+        if (event.item && event.item.type === 'message') {
+          const { id, role } = event.item;
+          if (id && role && (role === 'user' || role === 'assistant')) {
+            options.onTranscriptionStart?.(id, role);
+          }
+        }
         break;
       }
       default: {
@@ -68,6 +89,22 @@ export function useUnifiedSession(options: UseUnifiedSessionOptions = {}) {
     const lastMessage = history[history.length - 1];
     const agentName = lastMessage.name.split("transfer_to_")[1];
     options.onAgentHandoff?.(agentName);
+  };
+
+  // History added handler - notify when new messages start
+  const handleHistoryAdded = (item: any) => {
+    console.log('[History Added]', item);
+    // Call the default handler
+    historyHandlers.current.handleHistoryAdded(item);
+    
+    // Also notify our callback for database persistence
+    if (item && item.type === 'message') {
+      const { itemId, role } = item;
+      if (itemId && role && (role === 'user' || role === 'assistant')) {
+        console.log('[History Added - Starting Transcription]', { itemId, role });
+        options.onTranscriptionStart?.(itemId, role);
+      }
+    }
   };
 
   const fetchEphemeralKey = async (): Promise<string | null> => {
@@ -204,7 +241,7 @@ export function useUnifiedSession(options: UseUnifiedSessionOptions = {}) {
       sessionRef.current.on("agent_tool_start", historyHandlers.current.handleAgentToolStart);
       sessionRef.current.on("agent_tool_end", historyHandlers.current.handleAgentToolEnd);
       sessionRef.current.on("history_updated", historyHandlers.current.handleHistoryUpdated);
-      sessionRef.current.on("history_added", historyHandlers.current.handleHistoryAdded);
+      sessionRef.current.on("history_added", handleHistoryAdded);
       sessionRef.current.on("guardrail_tripped", historyHandlers.current.handleGuardrailTripped);
       sessionRef.current.on("transport_event", handleTransportEvent);
 

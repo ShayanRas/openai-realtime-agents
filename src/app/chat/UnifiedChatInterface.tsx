@@ -4,8 +4,10 @@ import React, { useState, useEffect, useRef } from 'react';
 import MessageList from './MessageList';
 import UnifiedMessageInput from './UnifiedMessageInput';
 import ThreadSidebar from './ThreadSidebar';
+import VoiceModal from '@/app/components/VoiceModal';
 import { useUnifiedSession } from '@/app/hooks/useUnifiedSession';
 import { useVoiceToChat } from '@/app/hooks/useVoiceToChat';
+import useAudioDownload from '@/app/hooks/useAudioDownload';
 import { v4 as uuidv4 } from 'uuid';
 import type { 
   Thread, 
@@ -26,23 +28,85 @@ export default function UnifiedChatInterface() {
 
   // Voice thread ID for voice sessions
   const [voiceThreadId, setVoiceThreadId] = useState<string | null>(null);
+  const voiceThreadIdRef = useRef<string | null>(null);
+  
+  // Audio recording for voice sessions
+  const { startRecording, stopRecording, downloadRecording } = useAudioDownload();
+  const audioElementRef = useRef<HTMLAudioElement | null>(null);
+  const [showVoiceModal, setShowVoiceModal] = useState(false);
+  const [voiceAudioStream, setVoiceAudioStream] = useState<MediaStream | null>(null);
 
   // Unified session for handling both text and voice
   const unifiedSession = useUnifiedSession({
-    onTranscriptionComplete: async (itemId: string, text: string, role: 'user' | 'assistant') => {
-      // When voice message is transcribed, save it to the voice thread
-      if (voiceThreadId) {
+    onTranscriptionStart: async (itemId: string, role: 'user' | 'assistant') => {
+      console.log('[onTranscriptionStart]', { itemId, role, voiceThreadId: voiceThreadIdRef.current });
+      // Create a placeholder message when transcription starts
+      if (voiceThreadIdRef.current) {
         const dbRole = role === 'user' ? 'USER' : 'ASSISTANT';
-        await saveMessageToThread(voiceThreadId, text, dbRole);
+        const placeholderText = '[Transcribing...]';
         
-        // If viewing the voice thread, reload messages
-        if (currentThreadId === voiceThreadId) {
-          await loadMessages(voiceThreadId);
+        // Save placeholder to database and reload
+        await saveMessageToThread(voiceThreadIdRef.current, placeholderText, dbRole, itemId);
+        
+        // Reload messages to show the placeholder
+        if (currentThreadId === voiceThreadIdRef.current) {
+          await loadMessages(voiceThreadIdRef.current);
+        }
+      }
+    },
+    onTranscriptionDelta: async (itemId: string, delta: string, role: 'user' | 'assistant') => {
+      console.log('[onTranscriptionDelta]', { itemId, delta, role, voiceThreadId: voiceThreadIdRef.current });
+      // Find the existing message in our messages array
+      if (voiceThreadIdRef.current) {
+        const existingMessage = messages.find(m => m.externalId === itemId);
+        if (existingMessage) {
+          const newText = existingMessage.content === '[Transcribing...]' ? delta : existingMessage.content + delta;
+          
+          // Update in database and reload
+          await updateMessageInThread(voiceThreadIdRef.current, itemId, newText);
+          
+          // Reload messages to show the update
+          if (currentThreadId === voiceThreadIdRef.current) {
+            await loadMessages(voiceThreadIdRef.current);
+          }
+        } else {
+          console.warn('[onTranscriptionDelta] Message not found:', itemId);
+        }
+      }
+    },
+    onTranscriptionComplete: async (itemId: string, text: string, role: 'user' | 'assistant') => {
+      console.log('[onTranscriptionComplete]', { itemId, text, role, voiceThreadId: voiceThreadIdRef.current });
+      // Finalize the transcribed message
+      if (voiceThreadIdRef.current) {
+        // Update with final text in database and reload
+        await updateMessageInThread(voiceThreadIdRef.current, itemId, text);
+        
+        // Reload messages to show the final text
+        if (currentThreadId === voiceThreadIdRef.current) {
+          await loadMessages(voiceThreadIdRef.current);
         }
       }
     },
     onStatusChange: (status) => {
       console.log('Voice session status:', status);
+      
+      // Start recording when connected
+      if (status === 'CONNECTED' && voiceThreadIdRef.current) {
+        console.log('[onStatusChange] Starting recording...');
+        // Get the audio element from the unified session
+        const audioEl = document.querySelector('audio[autoplay]') as HTMLAudioElement;
+        if (audioEl && audioEl.srcObject) {
+          console.log('[onStatusChange] Found audio element with stream');
+          audioElementRef.current = audioEl;
+          const stream = audioEl.srcObject as MediaStream;
+          setVoiceAudioStream(stream);
+          startRecording(stream);
+        } else {
+          console.error('[onStatusChange] Could not find audio element or stream');
+        }
+      } else if (status === 'DISCONNECTED') {
+        setVoiceAudioStream(null);
+      }
     },
     onAgentHandoff: (agentName) => {
       console.log('Agent handoff to:', agentName);
@@ -58,6 +122,14 @@ export default function UnifiedChatInterface() {
       const newSessionId = uuidv4();
       localStorage.setItem('chat-session-id', newSessionId);
       setSessionId(newSessionId);
+    }
+    
+    // Check if we're returning from a voice session
+    const savedThreadId = localStorage.getItem('voice-session-thread-id');
+    if (savedThreadId) {
+      setCurrentThreadId(savedThreadId);
+      // Clean up the saved thread ID
+      localStorage.removeItem('voice-session-thread-id');
     }
   }, []);
 
@@ -100,12 +172,13 @@ export default function UnifiedChatInterface() {
       const data = await response.json();
       setMessages(data.messages);
     } catch (error) {
-      console.error('Error loading messages:', error);
+      console.error('[loadMessages] Error:', error);
     }
   };
 
   const createNewThread = async (titleOrFirstMessage?: string, isVoiceSession: boolean = false) => {
     try {
+      console.log('[createNewThread] Creating thread:', { titleOrFirstMessage, isVoiceSession, sessionId });
       const response = await fetch('/api/chat/threads', {
         method: 'POST',
         headers: {
@@ -115,21 +188,31 @@ export default function UnifiedChatInterface() {
         body: JSON.stringify({
           title: isVoiceSession ? titleOrFirstMessage : (titleOrFirstMessage ? titleOrFirstMessage.slice(0, 50) : 'New Conversation'),
           firstMessage: isVoiceSession ? undefined : titleOrFirstMessage,
+          mode: isVoiceSession ? 'VOICE' : 'CHAT',
         }),
       });
+      
+      if (!response.ok) {
+        const errorData = await response.text();
+        console.error('[createNewThread] Failed:', response.status, errorData);
+        throw new Error(`Failed to create thread: ${response.status}`);
+      }
+      
       const data = await response.json();
+      console.log('[createNewThread] Success:', data);
       setCurrentThreadId(data.thread.id);
       await loadThreads();
       return data.thread;
     } catch (error) {
-      console.error('Error creating thread:', error);
+      console.error('[createNewThread] Error:', error);
       return null;
     }
   };
 
-  const saveMessageToThread = async (threadId: string, content: string, role: 'USER' | 'ASSISTANT') => {
+  const saveMessageToThread = async (threadId: string, content: string, role: 'USER' | 'ASSISTANT', externalId?: string) => {
     try {
-      await fetch('/api/chat/messages', {
+      console.log('[saveMessageToThread] Saving message:', { threadId, content, role, externalId });
+      const response = await fetch('/api/chat/messages', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -139,10 +222,48 @@ export default function UnifiedChatInterface() {
           content,
           role,
           contentType: 'TEXT',
+          externalId, // Use the itemId from voice session as externalId
         }),
       });
+      
+      if (!response.ok) {
+        const errorData = await response.text();
+        console.error('[saveMessageToThread] Failed:', response.status, errorData);
+        throw new Error(`Failed to save message: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      console.log('[saveMessageToThread] Success:', data);
     } catch (error) {
-      console.error('Error saving message:', error);
+      console.error('[saveMessageToThread] Error:', error);
+    }
+  };
+
+  const updateMessageInThread = async (threadId: string, externalId: string, content: string) => {
+    try {
+      console.log('[updateMessageInThread] Updating message:', { threadId, externalId, content });
+      const response = await fetch('/api/chat/messages', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          threadId,
+          externalId,
+          content,
+        }),
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.text();
+        console.error('[updateMessageInThread] Failed:', response.status, errorData);
+        throw new Error(`Failed to update message: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      console.log('[updateMessageInThread] Success:', data);
+    } catch (error) {
+      console.error('[updateMessageInThread] Error:', error);
     }
   };
 
@@ -157,7 +278,8 @@ export default function UnifiedChatInterface() {
 
     // If voice mode is active, send to voice session
     if (unifiedSession.isVoiceMode && unifiedSession.isConnected) {
-      unifiedSession.sendTextMessage(content);
+      console.log('[sendMessage] Sending text in voice mode:', content);
+      unifiedSession.sendUserText(content);
       // Voice response will be handled by the onVoiceMessage callback
       return;
     }
@@ -208,24 +330,60 @@ export default function UnifiedChatInterface() {
   };
 
   const handleVoiceToggle = async (enabled: boolean) => {
+    console.log('[handleVoiceToggle]', { enabled });
     if (enabled) {
       // Create a new thread for voice session
       const voiceThread = await createNewThread('🎙️ Voice Session', true);
       if (voiceThread) {
+        console.log('[handleVoiceToggle] Created voice thread:', voiceThread.id);
         setVoiceThreadId(voiceThread.id);
+        voiceThreadIdRef.current = voiceThread.id;  // Update ref
         setCurrentThreadId(voiceThread.id);
+        console.log('[handleVoiceToggle] Set currentThreadId to:', voiceThread.id);
+        setShowVoiceModal(true);
         await unifiedSession.toggleVoiceMode(true);
       }
     } else {
       // Disable voice mode
+      stopRecording();
       await unifiedSession.toggleVoiceMode(false);
       setVoiceThreadId(null);
+      voiceThreadIdRef.current = null;  // Update ref
+      setShowVoiceModal(false);
+    }
+  };
+
+  const handleCloseVoiceModal = () => {
+    handleVoiceToggle(false);
+  };
+
+  const copyTranscript = async () => {
+    if (!messages.length) return;
+    
+    const transcript = messages
+      .map(msg => {
+        // Convert role to proper case for display
+        const displayRole = msg.role === 'USER' ? 'User' : 
+                          msg.role === 'ASSISTANT' ? 'Assistant' : msg.role;
+        return `${displayRole}: ${msg.content}`;
+      })
+      .join('\n\n');
+    
+    try {
+      await navigator.clipboard.writeText(transcript);
+      // Could add a toast notification here
+      console.log('Transcript copied to clipboard');
+      alert('Transcript copied to clipboard!'); // Add user feedback
+    } catch (error) {
+      console.error('Failed to copy transcript:', error);
+      alert('Failed to copy transcript. Please try again.');
     }
   };
 
   return (
-    <div className="flex h-screen bg-gray-50">
-      {/* Sidebar */}
+    <>
+      <div className="flex h-screen bg-gray-50">
+        {/* Sidebar */}
       <ThreadSidebar
         threads={threads}
         currentThreadId={currentThreadId}
@@ -287,8 +445,19 @@ export default function UnifiedChatInterface() {
           isLoading={isLoading}
           voiceSession={unifiedSession}
           onVoiceToggle={handleVoiceToggle}
+          onDownloadAudio={voiceThreadId ? downloadRecording : undefined}
+          onCopyTranscript={voiceThreadId ? copyTranscript : undefined}
         />
       </div>
     </div>
+    
+    {/* Voice Modal */}
+    <VoiceModal
+      isOpen={showVoiceModal}
+      onClose={handleCloseVoiceModal}
+      audioStream={voiceAudioStream}
+      currentThreadId={currentThreadId}
+    />
+    </>
   );
 }

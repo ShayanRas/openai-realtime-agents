@@ -37,7 +37,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { title, firstMessage } = body;
+    const { title, firstMessage, mode = 'CHAT' } = body;
 
     // Ensure session exists
     let session = await prisma.session.findUnique({
@@ -55,7 +55,7 @@ export async function POST(request: NextRequest) {
       data: {
         sessionId,
         title: title || 'New Conversation',
-        mode: 'CHAT'
+        mode: mode as 'CHAT' | 'VOICE'
       }
     });
 

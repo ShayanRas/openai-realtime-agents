@@ -8,7 +8,8 @@
       "WebFetch(domain:openai.github.io)",
       "Bash(npm install:*)",
       "Bash(npx prisma:*)",
-      "Bash(rg:*)"
+      "Bash(rg:*)",
+      "Bash(docker logs:*)"
     ],
     "deny": []
   }

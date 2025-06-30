@@ -22,6 +22,7 @@ export interface Message {
   role: 'USER' | 'ASSISTANT' | 'SYSTEM' | 'TOOL';
   content: string;
   contentType: 'TEXT' | 'IMAGE' | 'MULTIMODAL';
+  externalId?: string;
   metadata?: Record<string, any>;
   createdAt: Date;
   attachments?: Attachment[];

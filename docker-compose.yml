@@ -45,7 +45,7 @@ services:
         echo 'Database not ready, waiting...' && sleep 2;
       done &&
       echo 'Setting up database...' &&
-      npx prisma db push --skip-generate &&
+      npx prisma db push --skip-generate --accept-data-loss &&
       echo 'Starting app...' &&
       npm run dev
       "

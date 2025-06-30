@@ -42,6 +42,7 @@ model Message {
   role        MessageRole
   content     String       @db.Text
   contentType ContentType  @default(TEXT)
+  externalId  String?      @unique // For voice session message tracking
   metadata    Json?
   createdAt   DateTime     @default(now())
   attachments Attachment[]
@@ -49,6 +50,7 @@ model Message {
   @@index([threadId])
   @@index([createdAt])
   @@index([role])
+  @@index([externalId])
 }
 
 model Attachment {

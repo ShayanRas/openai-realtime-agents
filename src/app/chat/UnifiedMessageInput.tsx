@@ -16,13 +16,17 @@ interface UnifiedMessageInputProps {
     handlePTTEnd: () => void;
   };
   onVoiceToggle: (enabled: boolean) => Promise<void>;
+  onDownloadAudio?: () => void;
+  onCopyTranscript?: () => void;
 }
 
 export default function UnifiedMessageInput({ 
   onSendMessage, 
   isLoading, 
   voiceSession,
-  onVoiceToggle 
+  onVoiceToggle,
+  onDownloadAudio,
+  onCopyTranscript 
 }: UnifiedMessageInputProps) {
   const [message, setMessage] = useState('');
   const [attachments, setAttachments] = useState<FileUpload[]>([]);
@@ -169,16 +173,44 @@ export default function UnifiedMessageInput({
             )}
           </div>
 
-          <button
-            onClick={() => voiceSession.mute(true)}
-            className="p-1 hover:bg-blue-100 rounded text-blue-600"
-            title="Mute"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
-            </svg>
-          </button>
+          <div className="flex items-center gap-2">
+            {onCopyTranscript && (
+              <button
+                onClick={onCopyTranscript}
+                className="px-3 py-1 text-sm bg-gray-200 hover:bg-gray-300 rounded-lg flex items-center gap-2"
+                title="Copy Transcript"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                </svg>
+                Copy
+              </button>
+            )}
+            
+            {onDownloadAudio && (
+              <button
+                onClick={onDownloadAudio}
+                className="px-3 py-1 text-sm bg-gray-200 hover:bg-gray-300 rounded-lg flex items-center gap-2"
+                title="Download Audio"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10" />
+                </svg>
+                Download
+              </button>
+            )}
+            
+            <button
+              onClick={() => voiceSession.mute(true)}
+              className="p-1 hover:bg-blue-100 rounded text-blue-600"
+              title="Mute"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
+              </svg>
+            </button>
+          </div>
         </div>
       )}
 
