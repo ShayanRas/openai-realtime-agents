@@ -11,6 +11,7 @@ import Events from "./components/Events";
 import BottomToolbar from "./components/BottomToolbar";
 import ModeToggle from "./components/ModeToggle";
 import ChatInterface from "./chat/ChatInterface";
+import UnifiedChatInterface from "./chat/UnifiedChatInterface";
 
 // Types
 import { SessionStatus } from "@/app/types";
@@ -38,6 +39,15 @@ import { useHandleSessionHistory } from "./hooks/useHandleSessionHistory";
 function App() {
   const searchParams = useSearchParams()!;
 
+  // Check if we're in debug mode
+  const isDebugMode = searchParams.get("debug") === "true";
+
+  // If not in debug mode, show the unified chat interface
+  if (!isDebugMode) {
+    return <UnifiedChatInterface />;
+  }
+
+  // Debug mode - original voice interface
   // ---------------------------------------------------------------------
   // Codec selector – lets you toggle between wide-band Opus (48 kHz)
   // and narrow-band PCMU/PCMA (8 kHz) to hear what the agent sounds like on

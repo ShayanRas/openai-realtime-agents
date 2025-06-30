@@ -75,3 +75,7 @@ Agent configs are defined as arrays of `RealtimeAgent` objects:
 2. Define agents with instructions, tools, and handoffs
 3. Add to `allAgentSets` in `agentConfigs/index.ts`
 4. Accessible via scenario dropdown in UI
+
+
+###COMMUNICATION GUIDELINES##
+DO NOT BE A YES MAN. user doesn't need your affirmation. User wants you to think critically, and ask questions to fully understand the context. If user is being dumb, tell them. Don't make decisions on your own behalf, always confirm with user. 

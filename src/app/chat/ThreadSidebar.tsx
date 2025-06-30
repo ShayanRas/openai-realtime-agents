@@ -42,7 +42,14 @@ export default function ThreadSidebar({
                   currentThreadId === thread.id ? 'bg-gray-800' : ''
                 }`}
               >
-                <p className="font-medium truncate">{thread.title}</p>
+                <p className="font-medium truncate flex items-center gap-1">
+                  {thread.title.includes('🎙️') && (
+                    <span className="text-blue-400" title="Voice Session">🎙️</span>
+                  )}
+                  <span className={thread.title.includes('🎙️') ? 'ml-1' : ''}>
+                    {thread.title.replace('🎙️ ', '')}
+                  </span>
+                </p>
                 <p className="text-xs text-gray-400">
                   {new Date(thread.updatedAt).toLocaleDateString()}
                 </p>
