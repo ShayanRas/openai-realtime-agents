@@ -11,7 +11,9 @@
       "Bash(rg:*)",
       "Bash(docker logs:*)",
       "WebFetch(domain:platform.openai.com)",
-      "WebFetch(domain:www.latent.space)"
+      "WebFetch(domain:www.latent.space)",
+      "Bash(find:*)",
+      "Bash(grep:*)"
     ],
     "deny": []
   }

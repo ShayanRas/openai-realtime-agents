@@ -50,14 +50,14 @@ export function useUnifiedSession(options: UseUnifiedSessionOptions = {}) {
         options.onSpeechStopped?.('user');
         break;
       }
-      case "response.audio.delta": {
-        console.log('[Assistant Audio Delta]', event);
-        // When we receive audio delta, assistant is speaking
+      case "response.created": {
+        console.log('[Response Created]', event);
+        // Assistant is about to speak
         options.onSpeechStarted?.('assistant');
         break;
       }
-      case "response.audio.done": {
-        console.log('[Assistant Audio Done]', event);
+      case "response.done": {
+        console.log('[Response Done]', event);
         options.onSpeechStopped?.('assistant');
         break;
       }

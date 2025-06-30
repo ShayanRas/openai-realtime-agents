@@ -34,8 +34,10 @@ export default function UnifiedChatInterface() {
   const { startRecording, stopRecording, downloadRecording } = useAudioDownload();
   const audioElementRef = useRef<HTMLAudioElement | null>(null);
   const [showVoiceModal, setShowVoiceModal] = useState(false);
-  const [voiceAudioStream, setVoiceAudioStream] = useState<MediaStream | null>(null);
+  const [localAudioStream, setLocalAudioStream] = useState<MediaStream | null>(null);
+  const [remoteAudioStream, setRemoteAudioStream] = useState<MediaStream | null>(null);
   const [speakingState, setSpeakingState] = useState<'idle' | 'user' | 'assistant'>('idle');
+  const speakingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Unified session for handling both text and voice
   const unifiedSession = useUnifiedSession({
@@ -93,20 +95,36 @@ export default function UnifiedChatInterface() {
       
       // Start recording when connected
       if (status === 'CONNECTED' && voiceThreadIdRef.current) {
-        console.log('[onStatusChange] Starting recording...');
-        // Get the audio element from the unified session
+        console.log('[onStatusChange] Starting recording and setting up audio streams...');
+        
+        // Get the remote audio stream from the audio element
         const audioEl = document.querySelector('audio[autoplay]') as HTMLAudioElement;
         if (audioEl && audioEl.srcObject) {
-          console.log('[onStatusChange] Found audio element with stream');
+          console.log('[onStatusChange] Found audio element with remote stream');
           audioElementRef.current = audioEl;
-          const stream = audioEl.srcObject as MediaStream;
-          setVoiceAudioStream(stream);
-          startRecording(stream);
+          const remoteStream = audioEl.srcObject as MediaStream;
+          setRemoteAudioStream(remoteStream);
+          startRecording(remoteStream);
         } else {
           console.error('[onStatusChange] Could not find audio element or stream');
         }
+        
+        // Get the local audio stream (user's microphone)
+        navigator.mediaDevices.getUserMedia({ audio: true })
+          .then(localStream => {
+            console.log('[onStatusChange] Got local audio stream');
+            setLocalAudioStream(localStream);
+          })
+          .catch(err => {
+            console.error('[onStatusChange] Error getting local audio:', err);
+          });
       } else if (status === 'DISCONNECTED') {
-        setVoiceAudioStream(null);
+        // Clean up streams
+        if (localAudioStream) {
+          localAudioStream.getTracks().forEach(track => track.stop());
+          setLocalAudioStream(null);
+        }
+        setRemoteAudioStream(null);
       }
     },
     onAgentHandoff: (agentName) => {
@@ -114,11 +132,19 @@ export default function UnifiedChatInterface() {
     },
     onSpeechStarted: (role: 'user' | 'assistant') => {
       console.log('[Speech Started]', role);
+      // Clear any pending timeout
+      if (speakingTimeoutRef.current) {
+        clearTimeout(speakingTimeoutRef.current);
+        speakingTimeoutRef.current = null;
+      }
       setSpeakingState(role);
     },
     onSpeechStopped: (role: 'user' | 'assistant') => {
       console.log('[Speech Stopped]', role);
-      setSpeakingState('idle');
+      // Add a small delay before going to idle to prevent flickering
+      speakingTimeoutRef.current = setTimeout(() => {
+        setSpeakingState('idle');
+      }, 300);
     }
   });
 
@@ -359,6 +385,12 @@ export default function UnifiedChatInterface() {
       setVoiceThreadId(null);
       voiceThreadIdRef.current = null;  // Update ref
       setShowVoiceModal(false);
+      
+      // Clean up local audio stream
+      if (localAudioStream) {
+        localAudioStream.getTracks().forEach(track => track.stop());
+        setLocalAudioStream(null);
+      }
     }
   };
 
@@ -464,7 +496,8 @@ export default function UnifiedChatInterface() {
     <VoiceModal
       isOpen={showVoiceModal}
       onClose={handleCloseVoiceModal}
-      audioStream={voiceAudioStream}
+      localAudioStream={localAudioStream}
+      remoteAudioStream={remoteAudioStream}
       currentThreadId={currentThreadId}
       speakingState={speakingState}
     />
