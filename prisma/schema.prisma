@@ -1,0 +1,86 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Session {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  threads   Thread[]
+}
+
+model Thread {
+  id        String   @id @default(uuid())
+  sessionId String
+  session   Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  mode      Mode     @default(CHAT)
+  title     String   @db.VarChar(255)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  messages  Message[]
+  
+  @@index([sessionId])
+  @@index([createdAt])
+  @@index([updatedAt])
+}
+
+model Message {
+  id          String       @id @default(uuid())
+  threadId    String
+  thread      Thread       @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  role        MessageRole
+  content     String       @db.Text
+  contentType ContentType  @default(TEXT)
+  metadata    Json?
+  createdAt   DateTime     @default(now())
+  attachments Attachment[]
+  
+  @@index([threadId])
+  @@index([createdAt])
+  @@index([role])
+}
+
+model Attachment {
+  id        String   @id @default(uuid())
+  messageId String
+  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  type      String   @db.VarChar(50) // image, document, etc.
+  url       String   @db.VarChar(500)
+  filename  String?  @db.VarChar(255)
+  size      Int?     // in bytes
+  mimeType  String?  @db.VarChar(100)
+  metadata  Json?
+  createdAt DateTime @default(now())
+  
+  @@index([messageId])
+  @@index([type])
+}
+
+enum Mode {
+  CHAT
+  VOICE
+}
+
+enum MessageRole {
+  USER
+  ASSISTANT
+  SYSTEM
+  TOOL
+}
+
+enum ContentType {
+  TEXT
+  IMAGE
+  MULTIMODAL
+}
