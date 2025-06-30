@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(rm:*)",
+      "WebFetch(domain:openai.github.io)",
+      "WebFetch(domain:openai.github.io)",
+      "WebFetch(domain:openai.github.io)",
+      "WebFetch(domain:openai.github.io)"
+    ],
+    "deny": []
+  }
+}
